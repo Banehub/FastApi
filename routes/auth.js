@@ -195,7 +195,8 @@ router.post('/login', validateLogin, async (req, res) => {
     console.log('✅ User logged in successfully:', { 
       userId: user._id, 
       email: user.email,
-      username: user.username
+      name: user.firstName,
+      tokenPreview: token.substring(0, 20) + '...'
     });
 
     res.json({
