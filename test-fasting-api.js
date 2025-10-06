@@ -16,7 +16,7 @@ const makeRequest = async (method, url, data = null) => {
       method,
       url: `${API_BASE_URL}${url}`,
       headers: {
-        'X-User-ID': authToken, // Now using X-User-ID header instead of Bearer token
+        'Authorization': `Bearer ${authToken}`, // Back to using JWT Bearer token
         'Content-Type': 'application/json'
       }
     };
@@ -134,8 +134,8 @@ async function getAuthToken() {
       password: 'password123'
     });
     
-    authToken = loginResponse.data.user.id; // Now using user ID instead of JWT token
-    console.log('✅ User ID obtained:', authToken);
+    authToken = loginResponse.data.token; // Using JWT token from login response
+    console.log('✅ JWT Token obtained:', authToken.substring(0, 20) + '...');
     
     return authToken;
   } catch (error) {
