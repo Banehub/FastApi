@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const authRoutes = require('./routes/auth');
+const fastingRoutes = require('./routes/fasting');
 
 // Load environment variables
 dotenv.config();
@@ -32,6 +33,7 @@ mongoose.connect(MONGODB_URI, {
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/fasting', fastingRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -60,4 +62,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Server is running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
   console.log(`🔐 Auth endpoints: http://localhost:${PORT}/api/auth/`);
+  console.log(`🏃‍♂️ Fasting endpoints: http://localhost:${PORT}/api/fasting/`);
 });
