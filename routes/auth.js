@@ -200,18 +200,12 @@ router.post('/login', validateLogin, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Login successful',
-      data: {
-        user: {
-          id: user._id,
-          username: user.username,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          lastLogin: user.lastLogin
-        },
-        token
-      }
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.firstName
+      },
+      token
     });
 
   } catch (error) {
