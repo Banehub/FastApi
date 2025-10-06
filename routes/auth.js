@@ -15,11 +15,18 @@ const generateToken = (userId) => {
 
 // Validation middleware
 const validateRegister = [
-  body('username')
-    .isLength({ min: 3, max: 30 })
-    .withMessage('Username must be between 3 and 30 characters')
-    .matches(/^[a-zA-Z0-9_]+$/)
-    .withMessage('Username can only contain letters, numbers, and underscores'),
+  body('name')
+    .notEmpty()
+    .trim()
+    .withMessage('Name is required'),
+  body('surname')
+    .notEmpty()
+    .trim()
+    .withMessage('Surname is required'),
+  body('cellNumber')
+    .notEmpty()
+    .trim()
+    .withMessage('Cell number is required'),
   body('email')
     .isEmail()
     .normalizeEmail()
@@ -27,14 +34,13 @@ const validateRegister = [
   body('password')
     .isLength({ min: 6 })
     .withMessage('Password must be at least 6 characters long'),
-  body('firstName')
-    .notEmpty()
-    .trim()
-    .withMessage('First name is required'),
-  body('lastName')
-    .notEmpty()
-    .trim()
-    .withMessage('Last name is required')
+  body('confirmPassword')
+    .custom((value, { req }) => {
+      if (value !== req.body.password) {
+        throw new Error('Password confirmation does not match password');
+      }
+      return true;
+    })
 ];
 
 const validateLogin = [
@@ -52,7 +58,8 @@ router.post('/register', validateRegister, async (req, res) => {
   try {
     console.log('📝 Register request received:', { 
       email: req.body.email, 
-      username: req.body.username,
+      name: req.body.name,
+      surname: req.body.surname,
       timestamp: new Date().toISOString()
     });
 
@@ -66,33 +73,35 @@ router.post('/register', validateRegister, async (req, res) => {
       });
     }
 
-    const { username, email, password, firstName, lastName, phone, dateOfBirth, address } = req.body;
+    const { name, surname, cellNumber, email, password } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findOne({
-      $or: [{ email }, { username }]
-    });
+    const existingUser = await User.findOne({ email });
 
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: existingUser.email === email ? 'Email already registered' : 'Username already taken'
+        message: 'Email already registered'
       });
     }
 
     // Create new user
     const user = new User({
-      username,
+      firstName: name,
+      lastName: surname,
+      phone: cellNumber,
       email,
-      password,
-      firstName,
-      lastName,
-      phone,
-      dateOfBirth,
-      address
+      password
     });
 
     await user.save();
+
+    console.log('💾 User saved to database:', {
+      database: 'fastapi',
+      collection: 'users',
+      userId: user._id,
+      email: user.email
+    });
 
     // Generate token
     const token = generateToken(user._id);
@@ -100,7 +109,8 @@ router.post('/register', validateRegister, async (req, res) => {
     console.log('✅ User registered successfully:', { 
       userId: user._id, 
       email: user.email,
-      username: user.username
+      name: user.firstName,
+      surname: user.lastName
     });
 
     res.status(201).json({
@@ -109,10 +119,10 @@ router.post('/register', validateRegister, async (req, res) => {
       data: {
         user: {
           id: user._id,
-          username: user.username,
+          name: user.firstName,
+          surname: user.lastName,
+          cellNumber: user.phone,
           email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
           createdAt: user.createdAt
         },
         token

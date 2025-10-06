@@ -3,14 +3,6 @@ const bcrypt = require('bcryptjs');
 
 // User schema
 const userSchema = new mongoose.Schema({
-  username: {
-    type: String,
-    required: [true, 'Username is required'],
-    unique: true,
-    trim: true,
-    minlength: [3, 'Username must be at least 3 characters long'],
-    maxlength: [30, 'Username cannot exceed 30 characters']
-  },
   email: {
     type: String,
     required: [true, 'Email is required'],
@@ -73,12 +65,11 @@ const userSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true,
-  collection: 'users' // This will create a 'users' collection
+  collection: 'users' // This will create a 'users' collection in the 'fastapi' database
 });
 
 // Index for better performance
 userSchema.index({ email: 1 });
-userSchema.index({ username: 1 });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

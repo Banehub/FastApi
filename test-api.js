@@ -7,20 +7,12 @@ const API_BASE_URL = 'http://localhost:5000/api';
 
 // Test data
 const testUser = {
-  username: 'testuser123',
+  name: 'John',
+  surname: 'Doe',
+  cellNumber: '+1234567890',
   email: 'test@example.com',
   password: 'password123',
-  firstName: 'John',
-  lastName: 'Doe',
-  phone: '+1234567890',
-  dateOfBirth: '1990-01-01',
-  address: {
-    street: '123 Main St',
-    city: 'New York',
-    state: 'NY',
-    zipCode: '10001',
-    country: 'USA'
-  }
+  confirmPassword: 'password123'
 };
 
 async function testAPI() {
