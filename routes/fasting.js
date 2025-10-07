@@ -20,7 +20,10 @@ const validateStartSession = [
   body('custom_start_minutes')
     .optional()
     .isInt({ min: 0, max: 59 })
-    .withMessage('Custom start minutes must be between 0 and 59')
+    .withMessage('Custom start minutes must be between 0 and 59'),
+  body('plan_type')
+    .isIn(['12:12', '14:10', '16:8', '18:6', '20:4'])
+    .withMessage('Plan type must be one of: 12:12, 14:10, 16:8, 18:6, 20:4')
 ];
 
 const validateStopSession = [
@@ -30,7 +33,11 @@ const validateStopSession = [
   body('end_time')
     .optional()
     .isISO8601()
-    .withMessage('End time must be a valid ISO 8601 date')
+    .withMessage('End time must be a valid ISO 8601 date'),
+  body('end_reason')
+    .optional()
+    .isIn(['completed', 'manually_stopped', 'interrupted'])
+    .withMessage('End reason must be one of: completed, manually_stopped, interrupted')
 ];
 
 const validateGetSessions = [
@@ -75,7 +82,7 @@ router.post('/start', validateStartSession, async (req, res) => {
       });
     }
 
-    const { start_type, custom_start_hours, custom_start_minutes } = req.body;
+    const { start_type, custom_start_hours, custom_start_minutes, plan_type } = req.body;
     const userId = req.user.id;
 
     // Check if user already has an active session
@@ -114,6 +121,7 @@ router.post('/start', validateStartSession, async (req, res) => {
       start_type: start_type,
       custom_start_hours: start_type === 'custom' ? custom_start_hours : null,
       custom_start_minutes: start_type === 'custom' ? custom_start_minutes : null,
+      plan_type: plan_type,
       status: 'active'
     });
 
@@ -133,10 +141,13 @@ router.post('/start', validateStartSession, async (req, res) => {
         start_time: session.start_time,
         end_time: session.end_time,
         duration_minutes: session.duration_minutes,
+        status: session.status,
         start_type: session.start_type,
+        plan_type: session.plan_type,
         custom_start_hours: session.custom_start_hours,
         custom_start_minutes: session.custom_start_minutes,
-        status: session.status
+        created_at: session.created_at,
+        updated_at: session.updated_at
       }
     });
 
@@ -171,7 +182,7 @@ router.put('/stop/:session_id', validateStopSession, async (req, res) => {
     }
 
     const { session_id } = req.params;
-    const { end_time } = req.body;
+    const { end_time, end_reason } = req.body;
     const userId = req.user.id;
 
     // Find the session
@@ -203,6 +214,7 @@ router.put('/stop/:session_id', validateStopSession, async (req, res) => {
     // Update session
     session.end_time = endTime;
     session.status = 'completed';
+    session.end_reason = end_reason || 'completed';
     await session.save();
 
     console.log('✅ Fasting session stopped:', {
@@ -210,6 +222,10 @@ router.put('/stop/:session_id', validateStopSession, async (req, res) => {
       userId: userId,
       duration: session.duration_minutes
     });
+
+    // Calculate analytics for the completed session
+    const metabolicStates = session.calculateMetabolicStates();
+    const planProgress = session.calculatePlanProgress();
 
     res.json({
       success: true,
@@ -219,10 +235,18 @@ router.put('/stop/:session_id', validateStopSession, async (req, res) => {
         start_time: session.start_time,
         end_time: session.end_time,
         duration_minutes: session.duration_minutes,
+        status: session.status,
         start_type: session.start_type,
+        plan_type: session.plan_type,
+        end_reason: session.end_reason,
         custom_start_hours: session.custom_start_hours,
         custom_start_minutes: session.custom_start_minutes,
-        status: session.status
+        created_at: session.created_at,
+        updated_at: session.updated_at
+      },
+      analytics: {
+        metabolic_states: metabolicStates,
+        plan_completion: planProgress
       }
     });
 
@@ -259,6 +283,11 @@ router.get('/current', async (req, res) => {
       userId: userId
     });
 
+    // Calculate current duration for active session
+    const currentDuration = activeSession.end_time 
+      ? activeSession.duration_minutes 
+      : Math.floor((new Date() - activeSession.start_time) / (1000 * 60));
+
     res.json({
       success: true,
       session: {
@@ -266,11 +295,14 @@ router.get('/current', async (req, res) => {
         user_id: activeSession.user_id,
         start_time: activeSession.start_time,
         end_time: activeSession.end_time,
-        duration_minutes: activeSession.duration_minutes,
+        duration_minutes: currentDuration,
+        status: activeSession.status,
         start_type: activeSession.start_type,
+        plan_type: activeSession.plan_type,
         custom_start_hours: activeSession.custom_start_hours,
         custom_start_minutes: activeSession.custom_start_minutes,
-        status: activeSession.status
+        created_at: activeSession.created_at,
+        updated_at: activeSession.updated_at
       }
     });
 
@@ -333,10 +365,14 @@ router.get('/sessions', validateGetSessions, async (req, res) => {
         start_time: session.start_time,
         end_time: session.end_time,
         duration_minutes: session.duration_minutes,
+        status: session.status,
         start_type: session.start_type,
+        plan_type: session.plan_type,
+        end_reason: session.end_reason,
         custom_start_hours: session.custom_start_hours,
         custom_start_minutes: session.custom_start_minutes,
-        status: session.status
+        created_at: session.created_at,
+        updated_at: session.updated_at
       })),
       pagination: {
         current_page: parseInt(page),
@@ -351,6 +387,191 @@ router.get('/sessions', validateGetSessions, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to get sessions',
+      code: 'SERVER_ERROR'
+    });
+  }
+});
+
+// 5. GET /api/fasting/analytics/summary - Get user metabolic analytics summary
+router.get('/analytics/summary', async (req, res) => {
+  try {
+    console.log('📈 Get analytics summary request:', {
+      userId: req.user.id,
+      timestamp: new Date().toISOString()
+    });
+
+    const userId = req.user.id;
+
+    // Get all completed sessions for the user
+    const sessions = await FastingSession.find({
+      user_id: userId,
+      status: 'completed'
+    }).sort({ start_time: -1 });
+
+    // Calculate summary statistics
+    const totalSessions = sessions.length;
+    const totalFastingMinutes = sessions.reduce((sum, session) => sum + (session.duration_minutes || 0), 0);
+    const totalFastingHours = totalFastingMinutes / 60;
+    const averageSessionHours = totalSessions > 0 ? totalFastingHours / totalSessions : 0;
+    const longestSessionHours = sessions.length > 0 ? Math.max(...sessions.map(s => (s.duration_minutes || 0) / 60)) : 0;
+
+    // Calculate metabolic breakdown
+    let totalFedHours = 0;
+    let totalTransitionHours = 0;
+    let totalFastingStateHours = 0;
+    let totalKetosisHours = 0;
+
+    sessions.forEach(session => {
+      const states = session.calculateMetabolicStates();
+      totalFedHours += states.fed.duration_minutes / 60;
+      totalTransitionHours += states.transition.duration_minutes / 60;
+      totalFastingStateHours += states.fasting.duration_minutes / 60;
+      totalKetosisHours += states.ketosis.duration_minutes / 60;
+    });
+
+    // Calculate plan usage
+    const planUsage = sessions.reduce((acc, session) => {
+      acc[session.plan_type] = (acc[session.plan_type] || 0) + 1;
+      return acc;
+    }, {});
+
+    // Calculate current streak (consecutive days with completed sessions)
+    let currentStreakDays = 0;
+    if (sessions.length > 0) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      for (let i = 0; i < sessions.length; i++) {
+        const sessionDate = new Date(sessions[i].end_time);
+        sessionDate.setHours(0, 0, 0, 0);
+        
+        const daysDiff = Math.floor((today - sessionDate) / (1000 * 60 * 60 * 24));
+        
+        if (daysDiff === i) {
+          currentStreakDays++;
+        } else {
+          break;
+        }
+      }
+    }
+
+    // Get recent sessions (last 5)
+    const recentSessions = sessions.slice(0, 5).map(session => {
+      const states = session.calculateMetabolicStates();
+      return {
+        id: session._id,
+        date: session.end_time.toISOString().split('T')[0],
+        plan_type: session.plan_type,
+        duration_hours: (session.duration_minutes || 0) / 60,
+        ketosis_hours: states.ketosis.duration_minutes / 60,
+        fasting_hours: states.fasting.duration_minutes / 60
+      };
+    });
+
+    console.log('✅ Analytics summary calculated:', {
+      userId: userId,
+      totalSessions: totalSessions,
+      totalFastingHours: totalFastingHours
+    });
+
+    res.json({
+      success: true,
+      total_sessions: totalSessions,
+      total_fasting_hours: Math.round(totalFastingHours * 100) / 100,
+      average_session_hours: Math.round(averageSessionHours * 100) / 100,
+      longest_session_hours: Math.round(longestSessionHours * 100) / 100,
+      current_streak_days: currentStreakDays,
+      metabolic_breakdown: {
+        total_fed_hours: Math.round(totalFedHours * 100) / 100,
+        total_transition_hours: Math.round(totalTransitionHours * 100) / 100,
+        total_fasting_hours: Math.round(totalFastingStateHours * 100) / 100,
+        total_ketosis_hours: Math.round(totalKetosisHours * 100) / 100
+      },
+      plan_usage: {
+        '12:12': planUsage['12:12'] || 0,
+        '14:10': planUsage['14:10'] || 0,
+        '16:8': planUsage['16:8'] || 0,
+        '18:6': planUsage['18:6'] || 0,
+        '20:4': planUsage['20:4'] || 0
+      },
+      recent_sessions: recentSessions
+    });
+
+  } catch (error) {
+    console.error('❌ Get analytics summary error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get analytics summary',
+      code: 'SERVER_ERROR'
+    });
+  }
+});
+
+// 6. GET /api/fasting/analytics/:session_id - Get metabolic analytics for a specific session
+router.get('/analytics/:session_id', [
+  param('session_id')
+    .isMongoId()
+    .withMessage('Invalid session ID')
+], async (req, res) => {
+  try {
+    console.log('📊 Get session analytics request:', {
+      userId: req.user.id,
+      sessionId: req.params.session_id,
+      timestamp: new Date().toISOString()
+    });
+
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: errors.array()
+      });
+    }
+
+    const userId = req.user.id;
+    const { session_id } = req.params;
+
+    // Find the session
+    const session = await FastingSession.findOne({
+      _id: session_id,
+      user_id: userId
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Fasting session not found',
+        code: 'INVALID_SESSION'
+      });
+    }
+
+    // Calculate analytics
+    const metabolicStates = session.calculateMetabolicStates();
+    const planProgress = session.calculatePlanProgress();
+
+    console.log('✅ Session analytics calculated:', {
+      sessionId: session._id,
+      duration: session.duration_minutes,
+      planType: session.plan_type
+    });
+
+    res.json({
+      success: true,
+      session_id: session._id,
+      total_duration_minutes: session.duration_minutes || 0,
+      plan_type: session.plan_type,
+      metabolic_states: metabolicStates,
+      plan_progress: planProgress
+    });
+
+  } catch (error) {
+    console.error('❌ Get session analytics error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get session analytics',
       code: 'SERVER_ERROR'
     });
   }

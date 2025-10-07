@@ -40,6 +40,16 @@ const fastingSessionSchema = new mongoose.Schema({
     enum: ['active', 'completed'],
     default: 'active'
   },
+  plan_type: {
+    type: String,
+    enum: ['12:12', '14:10', '16:8', '18:6', '20:4'],
+    required: [true, 'Plan type is required']
+  },
+  end_reason: {
+    type: String,
+    enum: ['completed', 'manually_stopped', 'interrupted'],
+    default: null
+  },
   created_at: {
     type: Date,
     default: Date.now
@@ -107,6 +117,56 @@ fastingSessionSchema.statics.countUserSessions = function(userId, status = 'all'
     query.status = status;
   }
   return this.countDocuments(query);
+};
+
+// Method to calculate metabolic states
+fastingSessionSchema.methods.calculateMetabolicStates = function() {
+  const durationMinutes = this.duration_minutes || 0;
+  
+  const fedMinutes = Math.min(durationMinutes, 240); // 0-4 hours
+  const transitionMinutes = Math.max(0, Math.min(durationMinutes - 240, 480)); // 4-12 hours
+  const fastingMinutes = Math.max(0, Math.min(durationMinutes - 720, 240)); // 12-16 hours
+  const ketosisMinutes = Math.max(0, durationMinutes - 960); // 16+ hours
+  
+  const total = durationMinutes || 1; // Avoid division by zero
+  
+  return {
+    fed: {
+      duration_minutes: fedMinutes,
+      percentage: Math.round((fedMinutes / total) * 100 * 100) / 100,
+      description: 'Fed State - Glucose fuel, No fat burning'
+    },
+    transition: {
+      duration_minutes: transitionMinutes,
+      percentage: Math.round((transitionMinutes / total) * 100 * 100) / 100,
+      description: 'Transition - Glycogen fuel, Light fat burning'
+    },
+    fasting: {
+      duration_minutes: fastingMinutes,
+      percentage: Math.round((fastingMinutes / total) * 100 * 100) / 100,
+      description: 'Fasting - Fat + Glycogen fuel, Fat burning starts'
+    },
+    ketosis: {
+      duration_minutes: ketosisMinutes,
+      percentage: Math.round((ketosisMinutes / total) * 100 * 100) / 100,
+      description: 'Ketosis - Fat + Ketones fuel, Strong fat burning'
+    }
+  };
+};
+
+// Method to calculate plan progress
+fastingSessionSchema.methods.calculatePlanProgress = function() {
+  const planHours = parseInt(this.plan_type.split(':')[0]);
+  const completedHours = (this.duration_minutes || 0) / 60;
+  const completionPercentage = Math.min(100, Math.round((completedHours / planHours) * 100 * 100) / 100);
+  const remainingHours = Math.max(0, planHours - completedHours);
+  
+  return {
+    plan_hours: planHours,
+    completed_hours: Math.round(completedHours * 100) / 100,
+    completion_percentage: completionPercentage,
+    remaining_hours: Math.round(remainingHours * 100) / 100
+  };
 };
 
 // Create FastingSession model
