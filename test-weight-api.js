@@ -143,28 +143,28 @@ async function testWeightAPI() {
     });
     console.log('');
 
-    // Step 9: Test duplicate entry prevention
-    console.log('9. Testing duplicate entry prevention...');
-    try {
-      const today = new Date();
-      await makeRequest('POST', '/weight/add', {
-        weight: 73.0,
-        date: today.toISOString()
-      });
-      console.log('✅ New entry added for today');
-      
-      // Try to add another entry for the same day
-      await makeRequest('POST', '/weight/add', {
-        weight: 72.8,
-        date: today.toISOString()
-      });
-    } catch (error) {
-      if (error.response?.data?.code === 'DUPLICATE_ENTRY') {
-        console.log('✅ Duplicate entry correctly prevented');
-      } else {
-        throw error;
-      }
-    }
+    // Step 9: Test multiple entries per day
+    console.log('9. Testing multiple entries per day...');
+    const today = new Date();
+    await makeRequest('POST', '/weight/add', {
+      weight: 73.0,
+      date: today.toISOString()
+    });
+    console.log('✅ First entry added for today: 73.0kg');
+    
+    // Add another entry for the same day
+    await makeRequest('POST', '/weight/add', {
+      weight: 72.8,
+      date: today.toISOString()
+    });
+    console.log('✅ Second entry added for today: 72.8kg');
+    
+    // Add a third entry for the same day
+    await makeRequest('POST', '/weight/add', {
+      weight: 72.5,
+      date: today.toISOString()
+    });
+    console.log('✅ Third entry added for today: 72.5kg');
     console.log('');
 
     // Step 10: Test validation errors
@@ -214,7 +214,7 @@ async function testWeightAPI() {
     console.log('✅ Weight history with pagination');
     console.log('✅ Current weight retrieval');
     console.log('✅ Comprehensive weight analytics');
-    console.log('✅ Duplicate entry prevention');
+    console.log('✅ Multiple entries per day support');
     console.log('✅ Input validation and error handling');
     console.log('✅ Progress tracking and trend analysis');
 

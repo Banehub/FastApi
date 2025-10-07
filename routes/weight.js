@@ -79,15 +79,7 @@ router.post('/add', validateAddWeight, async (req, res) => {
     // Set date (default to current time if not provided)
     const entryDate = date ? new Date(date) : new Date();
 
-    // Check if entry already exists for this date
-    const existingEntry = await WeightEntry.entryExistsForDate(userId, entryDate);
-    if (existingEntry) {
-      return res.status(400).json({
-        success: false,
-        error: 'Weight entry already exists for this date',
-        code: 'DUPLICATE_ENTRY'
-      });
-    }
+    // Multiple entries per day are now allowed for testing purposes
 
     // Create new weight entry
     const entry = new WeightEntry({
@@ -117,11 +109,17 @@ router.post('/add', validateAddWeight, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Add weight entry error:', error);
+    console.error('❌ Add weight entry error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code
+    });
     res.status(500).json({
       success: false,
       error: 'Failed to add weight entry',
-      code: 'SERVER_ERROR'
+      code: 'SERVER_ERROR',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

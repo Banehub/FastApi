@@ -33,7 +33,7 @@ const weightEntrySchema = new mongoose.Schema({
 // Indexes for better performance
 weightEntrySchema.index({ user_id: 1, date: -1 });
 weightEntrySchema.index({ user_id: 1, created_at: -1 });
-weightEntrySchema.index({ user_id: 1, date: 1 }, { unique: true }); // One entry per day per user
+// Removed unique constraint to allow multiple entries per day
 
 // Update the updated_at field before saving
 weightEntrySchema.pre('save', function(next) {
@@ -88,19 +88,7 @@ weightEntrySchema.statics.getWeightAnalytics = function(userId) {
   ]);
 };
 
-// Static method to check if entry exists for date
-weightEntrySchema.statics.entryExistsForDate = function(userId, date) {
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
-  
-  const endOfDay = new Date(date);
-  endOfDay.setHours(23, 59, 59, 999);
-  
-  return this.findOne({
-    user_id: userId,
-    date: { $gte: startOfDay, $lte: endOfDay }
-  });
-};
+// Multiple entries per day are now allowed
 
 // Create WeightEntry model
 const WeightEntry = mongoose.model('WeightEntry', weightEntrySchema);
