@@ -5,6 +5,26 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Middleware to capture raw body for debugging
+router.use((req, res, next) => {
+  if (req.method === 'POST' || req.method === 'PUT') {
+    let data = '';
+    req.on('data', chunk => {
+      data += chunk;
+    });
+    req.on('end', () => {
+      req.rawBody = data;
+      console.log('📦 Raw request body:', {
+        method: req.method,
+        url: req.url,
+        rawBody: data,
+        contentType: req.headers['content-type']
+      });
+    });
+  }
+  next();
+});
+
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
 
@@ -51,15 +71,34 @@ const validateGetSessions = [
 // 1. POST /api/exercise/start - Start a new exercise session
 router.post('/start', validateStartSession, async (req, res) => {
   try {
+    // Enhanced logging for debugging
     console.log('🏃‍♂️ Start exercise request received:', {
       userId: req.user.id,
-      exerciseType: req.body.exercise_type,
+      headers: req.headers,
+      body: req.body,
+      bodyType: typeof req.body,
+      bodyString: JSON.stringify(req.body),
       timestamp: new Date().toISOString()
     });
+
+    // Check if body is properly parsed
+    if (!req.body || typeof req.body !== 'object') {
+      console.error('❌ Invalid request body:', {
+        body: req.body,
+        bodyType: typeof req.body,
+        rawBody: req.rawBody
+      });
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request body format',
+        code: 'INVALID_BODY_FORMAT'
+      });
+    }
 
     // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.error('❌ Validation errors:', errors.array());
       return res.status(400).json({
         success: false,
         error: 'Validation failed',
@@ -116,11 +155,20 @@ router.post('/start', validateStartSession, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Start exercise error:', error);
+    console.error('❌ Start exercise error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      body: req.body,
+      headers: req.headers
+    });
+    
+    // Return more specific error information
     res.status(500).json({
       success: false,
       error: 'Failed to start exercise session',
-      code: 'SERVER_ERROR'
+      code: 'SERVER_ERROR',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
