@@ -392,7 +392,69 @@ router.get('/sessions', validateGetSessions, async (req, res) => {
   }
 });
 
-// 5. GET /api/fasting/analytics/summary - Get user metabolic analytics summary
+// 5. DELETE /api/fasting/sessions/:session_id - Delete a fasting session
+router.delete('/sessions/:session_id', [
+  param('session_id')
+    .isMongoId()
+    .withMessage('Invalid session ID')
+], async (req, res) => {
+  try {
+    console.log('🗑️  Delete session request received:', {
+      userId: req.user.id,
+      sessionId: req.params.session_id,
+      timestamp: new Date().toISOString()
+    });
+
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: errors.array()
+      });
+    }
+
+    const { session_id } = req.params;
+    const userId = req.user.id;
+
+    // Find and delete the session (only if it belongs to the user)
+    const session = await FastingSession.findOneAndDelete({
+      _id: session_id,
+      user_id: userId
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Fasting session not found',
+        code: 'INVALID_SESSION'
+      });
+    }
+
+    console.log('✅ Fasting session deleted:', {
+      sessionId: session._id,
+      userId: userId,
+      duration: session.duration_minutes
+    });
+
+    res.json({
+      success: true,
+      message: 'Session deleted'
+    });
+
+  } catch (error) {
+    console.error('❌ Delete session error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete session',
+      code: 'SERVER_ERROR'
+    });
+  }
+});
+
+// 7. GET /api/fasting/analytics/summary - Get user metabolic analytics summary
 router.get('/analytics/summary', async (req, res) => {
   try {
     console.log('📈 Get analytics summary request:', {
@@ -507,7 +569,7 @@ router.get('/analytics/summary', async (req, res) => {
   }
 });
 
-// 6. GET /api/fasting/analytics/:session_id - Get metabolic analytics for a specific session
+// 8. GET /api/fasting/analytics/:session_id - Get metabolic analytics for a specific session
 router.get('/analytics/:session_id', [
   param('session_id')
     .isMongoId()
