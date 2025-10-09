@@ -6,6 +6,8 @@ const authRoutes = require('./routes/auth');
 const fastingRoutes = require('./routes/fasting');
 const exerciseRoutes = require('./routes/exercise');
 const weightRoutes = require('./routes/weight');
+const bloodPressureRoutes = require('./routes/blood-pressure');
+const bloodSugarRoutes = require('./routes/blood-sugar');
 
 // Load environment variables
 dotenv.config();
@@ -80,6 +82,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/fasting', fastingRoutes);
 app.use('/api/exercise', exerciseRoutes);
 app.use('/api/weight', weightRoutes);
+app.use('/api/blood-pressure', bloodPressureRoutes);
+app.use('/api/blood-sugar', bloodSugarRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -130,4 +134,6 @@ app.listen(PORT, () => {
   console.log(`🏃‍♂️ Fasting endpoints: http://localhost:${PORT}/api/fasting/`);
   console.log(`💪 Exercise endpoints: http://localhost:${PORT}/api/exercise/`);
   console.log(`⚖️ Weight endpoints: http://localhost:${PORT}/api/weight/`);
+  console.log(`🩺 Blood Pressure endpoints: http://localhost:${PORT}/api/blood-pressure/`);
+  console.log(`🩸 Blood Sugar endpoints: http://localhost:${PORT}/api/blood-sugar/`);
 });
