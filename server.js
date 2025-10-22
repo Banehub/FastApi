@@ -9,6 +9,7 @@ const weightRoutes = require('./routes/weight');
 const bloodPressureRoutes = require('./routes/blood-pressure');
 const bloodSugarRoutes = require('./routes/blood-sugar');
 const bmiRoutes = require('./routes/bmi');
+const quitTrackingRoutes = require('./routes/quit-tracking');
 
 // Load environment variables
 dotenv.config();
@@ -86,6 +87,7 @@ app.use('/api/weight', weightRoutes);
 app.use('/api/blood-pressure', bloodPressureRoutes);
 app.use('/api/blood-sugar', bloodSugarRoutes);
 app.use('/api/bmi', bmiRoutes);
+app.use('/api/quit-tracking', quitTrackingRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -139,4 +141,5 @@ app.listen(PORT, () => {
   console.log(`🩺 Blood Pressure endpoints: http://localhost:${PORT}/api/blood-pressure/`);
   console.log(`🩸 Blood Sugar endpoints: http://localhost:${PORT}/api/blood-sugar/`);
   console.log(`📊 BMI endpoints: http://localhost:${PORT}/api/bmi/`);
+  console.log(`🚭 Quit Tracking endpoints: http://localhost:${PORT}/api/quit-tracking/`);
 });
