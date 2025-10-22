@@ -2,6 +2,14 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
+const WeightEntry = require('../models/WeightEntry');
+const WeightGoal = require('../models/WeightGoal');
+const BloodPressure = require('../models/BloodPressure');
+const BloodSugar = require('../models/BloodSugar');
+const BMI = require('../models/BMI');
+const ExerciseSession = require('../models/ExerciseSession');
+const FastingSession = require('../models/FastingSession');
+const QuitTracking = require('../models/QuitTracking');
 
 const router = express.Router();
 
@@ -251,6 +259,120 @@ router.get('/profile', async (req, res) => {
     res.status(401).json({
       success: false,
       message: 'Invalid token'
+    });
+  }
+});
+
+// Delete account endpoint (protected route)
+router.delete('/delete-account', async (req, res) => {
+  try {
+    console.log('🗑️ Delete account request received:', {
+      timestamp: new Date().toISOString()
+    });
+
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'Access denied. No token provided.'
+      });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const userId = decoded.userId;
+
+    // Find user first to confirm they exist
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    console.log('🗑️ Starting account deletion for user:', {
+      userId: userId,
+      email: user.email,
+      name: user.firstName
+    });
+
+    // Delete all user data from all collections
+    const deletionResults = await Promise.allSettled([
+      // Delete weight-related data
+      WeightEntry.deleteMany({ user_id: userId }),
+      WeightGoal.deleteMany({ user_id: userId }),
+      
+      // Delete health data
+      BloodPressure.deleteMany({ user_id: userId }),
+      BloodSugar.deleteMany({ user_id: userId }),
+      BMI.deleteMany({ user_id: userId }),
+      
+      // Delete activity data
+      ExerciseSession.deleteMany({ user_id: userId }),
+      FastingSession.deleteMany({ user_id: userId }),
+      
+      // Delete quit tracking data
+      QuitTracking.deleteMany({ user_id: userId }),
+      
+      // Finally, delete the user account
+      User.findByIdAndDelete(userId)
+    ]);
+
+    // Check if any deletions failed
+    const failedDeletions = deletionResults.filter(result => result.status === 'rejected');
+    if (failedDeletions.length > 0) {
+      console.error('❌ Some deletions failed:', failedDeletions);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to delete some user data',
+        details: failedDeletions.map(f => f.reason?.message || 'Unknown error')
+      });
+    }
+
+    console.log('✅ Account deletion completed successfully:', {
+      userId: userId,
+      email: user.email,
+      deletedCollections: [
+        'users', 'weight_entries', 'weight_goals', 
+        'blood_pressure', 'blood_sugar', 'bmi',
+        'exercise_sessions', 'fasting_sessions', 'quit_tracking'
+      ]
+    });
+
+    res.json({
+      success: true,
+      message: 'Account and all associated data deleted successfully',
+      data: {
+        deletedUserId: userId,
+        deletedEmail: user.email,
+        deletedAt: new Date().toISOString(),
+        deletedCollections: [
+          'users', 'weight_entries', 'weight_goals', 
+          'blood_pressure', 'blood_sugar', 'bmi',
+          'exercise_sessions', 'fasting_sessions', 'quit_tracking'
+        ]
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Delete account error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete account',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
 });
