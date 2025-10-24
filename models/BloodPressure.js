@@ -25,6 +25,10 @@ const bloodPressureSchema = new mongoose.Schema({
     required: [true, 'Date is required'],
     default: Date.now
   },
+  is_historical: {
+    type: Boolean,
+    default: false
+  },
   created_at: {
     type: Date,
     default: Date.now
@@ -40,6 +44,7 @@ const bloodPressureSchema = new mongoose.Schema({
 
 // Indexes for better performance
 bloodPressureSchema.index({ user_id: 1, date: -1 });
+bloodPressureSchema.index({ user_id: 1, date: -1, is_historical: 1 });
 
 // Update the updated_at field before saving
 bloodPressureSchema.pre('save', function(next) {

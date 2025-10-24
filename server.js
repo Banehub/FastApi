@@ -10,6 +10,7 @@ const bloodPressureRoutes = require('./routes/blood-pressure');
 const bloodSugarRoutes = require('./routes/blood-sugar');
 const bmiRoutes = require('./routes/bmi');
 const quitTrackingRoutes = require('./routes/quit-tracking');
+const healthRoutes = require('./routes/health');
 
 // Load environment variables
 dotenv.config();
@@ -88,6 +89,7 @@ app.use('/api/blood-pressure', bloodPressureRoutes);
 app.use('/api/blood-sugar', bloodSugarRoutes);
 app.use('/api/bmi', bmiRoutes);
 app.use('/api/quit-tracking', quitTrackingRoutes);
+app.use('/api/health-analytics', healthRoutes);
 
 
 app.get('/api/health', (req, res) => {

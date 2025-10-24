@@ -79,13 +79,44 @@ router.post('/add', validateAddWeight, async (req, res) => {
     // Set date (default to current time if not provided)
     const entryDate = date ? new Date(date) : new Date();
 
-    // Multiple entries per day are now allowed for testing purposes
+    // Validate historical date if provided
+    if (date) {
+      const today = new Date();
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(today.getFullYear() - 1);
+
+      // Check if date is in the future
+      if (entryDate > today) {
+        return res.status(400).json({
+          success: false,
+          error: 'HISTORICAL_DATE_FUTURE',
+          message: 'Cannot add historical data for future dates'
+        });
+      }
+
+      // Check if date is more than one year ago
+      if (entryDate < oneYearAgo) {
+        return res.status(400).json({
+          success: false,
+          error: 'HISTORICAL_DATE_TOO_OLD',
+          message: 'Historical data can only be added for dates within the last year',
+          details: {
+            provided_date: entryDate.toISOString(),
+            max_historical_date: oneYearAgo.toISOString()
+          }
+        });
+      }
+    }
+
+    // Determine if this is a historical entry
+    const isHistorical = date ? (new Date(date) < new Date(new Date().setHours(0, 0, 0, 0))) : false;
 
     // Create new weight entry
     const entry = new WeightEntry({
       user_id: userId,
       weight: weight,
-      date: entryDate
+      date: entryDate,
+      is_historical: isHistorical
     });
 
     await entry.save();
@@ -99,11 +130,13 @@ router.post('/add', validateAddWeight, async (req, res) => {
 
     res.status(201).json({
       success: true,
+      message: isHistorical ? 'Historical weight entry added successfully' : 'Weight entry added successfully',
       entry: {
         id: entry._id,
         user_id: entry.user_id,
         weight: entry.weight,
         date: entry.date,
+        is_historical: entry.is_historical,
         created_at: entry.created_at
       }
     });

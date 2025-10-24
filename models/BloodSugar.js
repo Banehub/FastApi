@@ -24,6 +24,10 @@ const bloodSugarSchema = new mongoose.Schema({
     required: [true, 'Date is required'],
     default: Date.now
   },
+  is_historical: {
+    type: Boolean,
+    default: false
+  },
   created_at: {
     type: Date,
     default: Date.now
@@ -40,6 +44,7 @@ const bloodSugarSchema = new mongoose.Schema({
 // Indexes for better performance
 bloodSugarSchema.index({ user_id: 1, date: -1 });
 bloodSugarSchema.index({ user_id: 1, meal_type: 1 });
+bloodSugarSchema.index({ user_id: 1, date: -1, is_historical: 1 });
 
 // Update the updated_at field before saving
 bloodSugarSchema.pre('save', function(next) {

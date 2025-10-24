@@ -17,6 +17,10 @@ const weightEntrySchema = new mongoose.Schema({
     type: Date,
     required: [true, 'Date is required']
   },
+  is_historical: {
+    type: Boolean,
+    default: false
+  },
   created_at: {
     type: Date,
     default: Date.now
@@ -33,6 +37,7 @@ const weightEntrySchema = new mongoose.Schema({
 // Indexes for better performance
 weightEntrySchema.index({ user_id: 1, date: -1 });
 weightEntrySchema.index({ user_id: 1, created_at: -1 });
+weightEntrySchema.index({ user_id: 1, date: -1, is_historical: 1 });
 // Removed unique constraint to allow multiple entries per day
 
 // Update the updated_at field before saving
