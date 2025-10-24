@@ -42,7 +42,7 @@ const fastingSessionSchema = new mongoose.Schema({
   },
   plan_type: {
     type: String,
-    enum: ['12:12', '14:10', '16:8', '18:6', '20:4'],
+    enum: ['12:12', '14:10', '16:8', '18:6', '20:4', 'custom'],
     required: [true, 'Plan type is required']
   },
   end_reason: {
@@ -93,12 +93,16 @@ fastingSessionSchema.statics.getUserSessions = function(userId, options = {}) {
   const {
     page = 1,
     limit = 20,
-    status = 'all'
+    status = 'all',
+    plan_type = 'all'
   } = options;
 
   const query = { user_id: userId };
   if (status !== 'all') {
     query.status = status;
+  }
+  if (plan_type !== 'all') {
+    query.plan_type = plan_type;
   }
 
   const skip = (page - 1) * limit;
@@ -111,10 +115,14 @@ fastingSessionSchema.statics.getUserSessions = function(userId, options = {}) {
 };
 
 // Static method to count user sessions
-fastingSessionSchema.statics.countUserSessions = function(userId, status = 'all') {
+fastingSessionSchema.statics.countUserSessions = function(userId, options = {}) {
+  const { status = 'all', plan_type = 'all' } = options;
   const query = { user_id: userId };
   if (status !== 'all') {
     query.status = status;
+  }
+  if (plan_type !== 'all') {
+    query.plan_type = plan_type;
   }
   return this.countDocuments(query);
 };
@@ -126,7 +134,8 @@ fastingSessionSchema.methods.calculateMetabolicStates = function() {
   const fedMinutes = Math.min(durationMinutes, 240); // 0-4 hours
   const transitionMinutes = Math.max(0, Math.min(durationMinutes - 240, 480)); // 4-12 hours
   const fastingMinutes = Math.max(0, Math.min(durationMinutes - 720, 240)); // 12-16 hours
-  const ketosisMinutes = Math.max(0, durationMinutes - 960); // 16+ hours
+  const ketosisMinutes = Math.max(0, Math.min(durationMinutes - 960, 480)); // 16-24 hours
+  const autophagyMinutes = Math.max(0, durationMinutes - 1440); // 24+ hours
   
   const total = durationMinutes || 1; // Avoid division by zero
   
@@ -150,12 +159,28 @@ fastingSessionSchema.methods.calculateMetabolicStates = function() {
       duration_minutes: ketosisMinutes,
       percentage: Math.round((ketosisMinutes / total) * 100 * 100) / 100,
       description: 'Ketosis - Fat + Ketones fuel, Strong fat burning'
+    },
+    autophagy: {
+      duration_minutes: autophagyMinutes,
+      percentage: Math.round((autophagyMinutes / total) * 100 * 100) / 100,
+      description: 'Autophagy - Cellular cleanup, Maximum health benefits'
     }
   };
 };
 
 // Method to calculate plan progress
 fastingSessionSchema.methods.calculatePlanProgress = function() {
+  // For custom fasts, we don't have a predefined target
+  if (this.plan_type === 'custom') {
+    const completedHours = (this.duration_minutes || 0) / 60;
+    return {
+      plan_hours: null, // No predefined target for custom fasts
+      completed_hours: Math.round(completedHours * 100) / 100,
+      completion_percentage: null, // No percentage for custom fasts
+      remaining_hours: null // No remaining hours for custom fasts
+    };
+  }
+  
   const planHours = parseInt(this.plan_type.split(':')[0]);
   const completedHours = (this.duration_minutes || 0) / 60;
   const completionPercentage = Math.min(100, Math.round((completedHours / planHours) * 100 * 100) / 100);

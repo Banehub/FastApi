@@ -89,7 +89,7 @@ app.use('/api/blood-sugar', bloodSugarRoutes);
 app.use('/api/bmi', bmiRoutes);
 app.use('/api/quit-tracking', quitTrackingRoutes);
 
-// Health check endpoint
+
 app.get('/api/health', (req, res) => {
   res.json({ 
     message: 'API is running!', 

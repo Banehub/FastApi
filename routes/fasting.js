@@ -22,8 +22,8 @@ const validateStartSession = [
     .isInt({ min: 0, max: 59 })
     .withMessage('Custom start minutes must be between 0 and 59'),
   body('plan_type')
-    .isIn(['12:12', '14:10', '16:8', '18:6', '20:4'])
-    .withMessage('Plan type must be one of: 12:12, 14:10, 16:8, 18:6, 20:4')
+    .isIn(['12:12', '14:10', '16:8', '18:6', '20:4', 'custom'])
+    .withMessage('Plan type must be one of: 12:12, 14:10, 16:8, 18:6, 20:4, custom')
 ];
 
 const validateStopSession = [
@@ -52,7 +52,11 @@ const validateGetSessions = [
   query('status')
     .optional()
     .isIn(['active', 'completed', 'all'])
-    .withMessage('Status must be "active", "completed", or "all"')
+    .withMessage('Status must be "active", "completed", or "all"'),
+  query('plan_type')
+    .optional()
+    .isIn(['12:12', '14:10', '16:8', '18:6', '20:4', 'custom', 'all'])
+    .withMessage('Plan type must be one of: 12:12, 14:10, 16:8, 18:6, 20:4, custom, all')
 ];
 
 // Helper function to calculate custom start time
@@ -340,13 +344,14 @@ router.get('/sessions', validateGetSessions, async (req, res) => {
     const {
       page = 1,
       limit = 20,
-      status = 'all'
+      status = 'all',
+      plan_type = 'all'
     } = req.query;
 
     // Get sessions and total count
     const [sessions, totalSessions] = await Promise.all([
-      FastingSession.getUserSessions(userId, { page: parseInt(page), limit: parseInt(limit), status }),
-      FastingSession.countUserSessions(userId, status)
+      FastingSession.getUserSessions(userId, { page: parseInt(page), limit: parseInt(limit), status, plan_type }),
+      FastingSession.countUserSessions(userId, { status, plan_type })
     ]);
 
     const totalPages = Math.ceil(totalSessions / limit);
@@ -482,6 +487,7 @@ router.get('/analytics/summary', async (req, res) => {
     let totalTransitionHours = 0;
     let totalFastingStateHours = 0;
     let totalKetosisHours = 0;
+    let totalAutophagyHours = 0;
 
     sessions.forEach(session => {
       const states = session.calculateMetabolicStates();
@@ -489,6 +495,7 @@ router.get('/analytics/summary', async (req, res) => {
       totalTransitionHours += states.transition.duration_minutes / 60;
       totalFastingStateHours += states.fasting.duration_minutes / 60;
       totalKetosisHours += states.ketosis.duration_minutes / 60;
+      totalAutophagyHours += states.autophagy.duration_minutes / 60;
     });
 
     // Calculate plan usage
@@ -496,6 +503,15 @@ router.get('/analytics/summary', async (req, res) => {
       acc[session.plan_type] = (acc[session.plan_type] || 0) + 1;
       return acc;
     }, {});
+
+    // Calculate custom fast statistics
+    const customFastSessions = sessions.filter(session => session.plan_type === 'custom');
+    const customFastStats = {
+      total_custom_sessions: customFastSessions.length,
+      total_custom_hours: customFastSessions.reduce((sum, session) => sum + (session.duration_minutes || 0), 0) / 60,
+      longest_custom_fast: customFastSessions.length > 0 ? Math.max(...customFastSessions.map(s => (s.duration_minutes || 0) / 60)) : 0,
+      average_custom_fast: customFastSessions.length > 0 ? customFastSessions.reduce((sum, session) => sum + (session.duration_minutes || 0), 0) / 60 / customFastSessions.length : 0
+    };
 
     // Calculate current streak (consecutive days with completed sessions)
     let currentStreakDays = 0;
@@ -526,7 +542,8 @@ router.get('/analytics/summary', async (req, res) => {
         plan_type: session.plan_type,
         duration_hours: (session.duration_minutes || 0) / 60,
         ketosis_hours: states.ketosis.duration_minutes / 60,
-        fasting_hours: states.fasting.duration_minutes / 60
+        fasting_hours: states.fasting.duration_minutes / 60,
+        autophagy_hours: states.autophagy.duration_minutes / 60
       };
     });
 
@@ -547,14 +564,22 @@ router.get('/analytics/summary', async (req, res) => {
         total_fed_hours: Math.round(totalFedHours * 100) / 100,
         total_transition_hours: Math.round(totalTransitionHours * 100) / 100,
         total_fasting_hours: Math.round(totalFastingStateHours * 100) / 100,
-        total_ketosis_hours: Math.round(totalKetosisHours * 100) / 100
+        total_ketosis_hours: Math.round(totalKetosisHours * 100) / 100,
+        total_autophagy_hours: Math.round(totalAutophagyHours * 100) / 100
       },
       plan_usage: {
         '12:12': planUsage['12:12'] || 0,
         '14:10': planUsage['14:10'] || 0,
         '16:8': planUsage['16:8'] || 0,
         '18:6': planUsage['18:6'] || 0,
-        '20:4': planUsage['20:4'] || 0
+        '20:4': planUsage['20:4'] || 0,
+        'custom': planUsage['custom'] || 0
+      },
+      custom_fast_stats: {
+        total_custom_sessions: Math.round(customFastStats.total_custom_sessions * 100) / 100,
+        total_custom_hours: Math.round(customFastStats.total_custom_hours * 100) / 100,
+        longest_custom_fast: Math.round(customFastStats.longest_custom_fast * 100) / 100,
+        average_custom_fast: Math.round(customFastStats.average_custom_fast * 100) / 100
       },
       recent_sessions: recentSessions
     });
